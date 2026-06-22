@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>True Positive LLC</title>
+  <meta name="description" content="True Positive LLC builds privacy-respecting developer software, including Glymr, a modern SSH client and terminal for iOS.">
+  <meta name="color-scheme" content="dark light">
+
+  <!-- Open Graph / social preview -->
+  <meta property="og:title" content="True Positive LLC">
+  <meta property="og:description" content="Secure, privacy-respecting tools for developers.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://truepositive.dev">
+
+  <!-- Inline SVG favicon: a bronze check — a "true positive". -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23141210'/%3E%3Cpath d='M9 16.5l4.5 4.5L23 11' fill='none' stroke='%23c8924a' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+
+  <style>
+    :root {
+      --bg: #141210;
+      --panel: #1d1a16;
+      --line: #2c2620;
+      --text: #ece6dc;
+      --muted: #a59c8c;
+      --bronze: #c8924a;
+      --bronze-bright: #e0a85f;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 640px;
+      margin: 0 auto;
+      padding: clamp(2.5rem, 8vw, 6rem) 1.5rem 3rem;
+    }
+    .mark {
+      display: inline-flex;
+      align-items: center;
+      gap: .6rem;
+      margin-bottom: 2.25rem;
+      color: var(--muted);
+      font-size: .82rem;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .mark svg { width: 26px; height: 26px; display: block; }
+    h1 {
+      margin: 0 0 .35rem;
+      font-size: clamp(2.1rem, 7vw, 3rem);
+      font-weight: 650;
+      letter-spacing: -.02em;
+      line-height: 1.1;
+    }
+    .lede {
+      margin: 0 0 2.5rem;
+      font-size: clamp(1.05rem, 3.5vw, 1.25rem);
+      color: var(--bronze-bright);
+    }
+    p { margin: 0 0 1.25rem; color: var(--text); }
+    .muted { color: var(--muted); }
+    .product {
+      margin: 2.5rem 0;
+      padding: 1.4rem 1.5rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    .product h2 {
+      margin: 0 0 .4rem;
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
+    .product .tag {
+      display: inline-block;
+      margin-left: .5rem;
+      padding: .1rem .5rem;
+      border: 1px solid var(--bronze);
+      border-radius: 999px;
+      color: var(--bronze);
+      font-size: .72rem;
+      letter-spacing: .05em;
+      vertical-align: middle;
+    }
+    .product p { margin: 0; color: var(--muted); }
+    .contact { margin-top: 2.75rem; }
+    .contact a {
+      color: var(--bronze-bright);
+      text-decoration: none;
+      border-bottom: 1px solid var(--line);
+      transition: border-color .15s ease;
+    }
+    .contact a:hover { border-color: var(--bronze-bright); }
+    footer {
+      max-width: 640px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1.5rem;
+      color: var(--muted);
+      font-size: .82rem;
+      border-top: 1px solid var(--line);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <span class="mark">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="7" fill="#1d1a16"/>
+        <path d="M9 16.5l4.5 4.5L23 11" fill="none" stroke="#c8924a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      True Positive LLC
+    </span>
+
+    <h1>True Positive</h1>
+    <p class="lede">Secure, privacy-respecting tools for developers.</p>
+
+    <p>True Positive LLC builds software that treats your data as yours — encrypted on
+      the device, never harvested. We design for people who care how their tools
+      handle secrets, not just what they do.</p>
+
+    <section class="product">
+      <h2>Glymr <span class="tag">In development</span></h2>
+      <p>A modern SSH client and terminal for iOS, with end-to-end-encrypted host
+        and key storage that syncs across your devices.</p>
+    </section>
+
+    <p class="contact muted">
+      Get in touch: <a href="mailto:hello@truepositive.dev">hello@truepositive.dev</a>
+    </p>
+  </main>
+
+  <footer>© 2026 True Positive LLC · truepositive.dev</footer>
+</body>
+</html>
