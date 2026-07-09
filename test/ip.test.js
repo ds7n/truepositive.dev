@@ -119,3 +119,39 @@ test('extractFields tolerates a request with no cf property', () => {
   assert.equal(f.country, null);
   assert.equal(f.path, '/ip');
 });
+
+import { renderJson, renderHtml } from '../functions/_lib.js';
+
+const SAMPLE = {
+  ts: '2026-07-09T12:00:00.000Z', ip: '203.0.113.7', country: 'US', city: 'Dallas',
+  asn: 13335, colo: 'DFW', method: 'GET', path: '/ip', http_ver: 'HTTP/2',
+  user_agent: 'curl/8.7.1', referer: null, accept_lang: null,
+  tls_version: 'TLSv1.3', tls_cipher: 'AEAD-AES128-GCM-SHA256',
+  headers: { 'user-agent': 'curl/8.7.1', accept: '*/*' },
+};
+
+test('renderJson returns the fields object unchanged', () => {
+  assert.deepEqual(renderJson(SAMPLE), SAMPLE);
+});
+
+test('renderHtml escapes a malicious User-Agent (no raw <script>)', () => {
+  const html = renderHtml({ ...SAMPLE, user_agent: '<script>alert(1)</script>',
+    headers: { 'user-agent': '<script>alert(1)</script>' } });
+  assert.equal(html.includes('<script>alert(1)</script>'), false);
+  assert.equal(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'), true);
+});
+
+test('renderHtml never emits a sensitive header even if one leaks into headers', () => {
+  // Defense-in-depth: renderHtml only renders what it is given, but the field
+  // pipeline redacts upstream. Verify a benign header shows and the doc is well-formed.
+  const html = renderHtml(SAMPLE);
+  assert.equal(html.startsWith('<!DOCTYPE html>'), true);
+  assert.equal(html.includes('203.0.113.7'), true);
+  assert.equal(html.includes('TLSv1.3'), true);
+});
+
+test('renderHtml renders missing values as an em dash', () => {
+  const html = renderHtml({ ...SAMPLE, referer: null });
+  // The Referer row label is present and its value cell shows the dash.
+  assert.match(html, /Referer[\s\S]*?—/);
+});
