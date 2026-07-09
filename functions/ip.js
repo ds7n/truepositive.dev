@@ -68,11 +68,10 @@ export async function onRequestHead(context) {
   return new Response(null, { status: res.status, headers: res.headers });
 }
 
-// Any other method → 405.
-export function onRequest(context) {
-  const m = context.request.method;
-  if (m === 'GET') return onRequestGet(context);
-  if (m === 'HEAD') return onRequestHead(context);
+// GET and HEAD are handled by onRequestGet/onRequestHead above (Cloudflare
+// routes method-specific handlers with precedence over onRequest). This
+// catch-all therefore only runs for other methods → 405.
+export function onRequest() {
   return new Response('Method Not Allowed', {
     status: 405,
     headers: { ...SECURITY_HEADERS, Allow: 'GET, HEAD' },
