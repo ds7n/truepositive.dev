@@ -67,3 +67,55 @@ test('SENSITIVE_HEADERS contains the documented omit set', () => {
     assert.equal(SENSITIVE_HEADERS.has(name), true, name);
   }
 });
+
+import { extractFields } from '../functions/_lib.js';
+
+function fakeRequest({ url = 'https://truepositive.dev/ip', method = 'GET', headers = {}, cf = {} } = {}) {
+  return { url, method, headers: new Headers(headers), cf };
+}
+
+test('extractFields pulls IP from cf-connecting-ip and path from URL', () => {
+  const f = extractFields(fakeRequest({
+    headers: { 'cf-connecting-ip': '203.0.113.7', 'user-agent': 'curl/8.7.1' },
+    cf: { country: 'US', city: 'Dallas', asn: 13335, colo: 'DFW',
+          httpProtocol: 'HTTP/2', tlsVersion: 'TLSv1.3', tlsCipher: 'AEAD-AES128-GCM-SHA256' },
+  }));
+  assert.equal(f.ip, '203.0.113.7');
+  assert.equal(f.path, '/ip');
+  assert.equal(f.method, 'GET');
+  assert.equal(f.country, 'US');
+  assert.equal(f.asn, 13335);
+  assert.equal(f.colo, 'DFW');
+  assert.equal(f.http_ver, 'HTTP/2');
+  assert.equal(f.tls_version, 'TLSv1.3');
+  assert.equal(f.tls_cipher, 'AEAD-AES128-GCM-SHA256');
+  assert.equal(f.user_agent, 'curl/8.7.1');
+  assert.equal(typeof f.ts, 'string');
+  assert.match(f.ts, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test('extractFields defaults missing cf fields to null (no throw)', () => {
+  const f = extractFields(fakeRequest({ headers: {}, cf: {} }));
+  assert.equal(f.country, null);
+  assert.equal(f.asn, null);
+  assert.equal(f.tls_version, null);
+  assert.equal(f.ip, null);
+  assert.equal(f.user_agent, null);
+  assert.equal(f.referer, null);
+  assert.equal(f.accept_lang, null);
+});
+
+test('extractFields redacts sensitive headers in the headers map', () => {
+  const f = extractFields(fakeRequest({
+    headers: { 'user-agent': 'curl/8.7.1', cookie: 'session=abc', authorization: 'Bearer x' },
+  }));
+  assert.equal('cookie' in f.headers, false);
+  assert.equal('authorization' in f.headers, false);
+  assert.equal(f.headers['user-agent'], 'curl/8.7.1');
+});
+
+test('extractFields tolerates a request with no cf property', () => {
+  const f = extractFields({ url: 'https://truepositive.dev/ip', method: 'GET', headers: new Headers() });
+  assert.equal(f.country, null);
+  assert.equal(f.path, '/ip');
+});

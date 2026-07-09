@@ -35,3 +35,38 @@ export function redactHeaders(obj) {
   }
   return out;
 }
+
+/** Read a header, returning null when absent. */
+function header(obj, name) {
+  return obj[name] ?? null;
+}
+
+/** Read a cf property, returning null when absent. */
+function cf(request, key) {
+  return request.cf && request.cf[key] !== undefined ? request.cf[key] : null;
+}
+
+/**
+ * Extract the flat field record echoed + logged for a request.
+ * Missing cf/header values are null. `headers` is the redacted header map.
+ */
+export function extractFields(request) {
+  const all = headersToObject(request.headers);
+  return {
+    ts: new Date().toISOString(),
+    ip: header(all, 'cf-connecting-ip'),
+    country: cf(request, 'country'),
+    city: cf(request, 'city'),
+    asn: cf(request, 'asn'),
+    colo: cf(request, 'colo'),
+    method: request.method,
+    path: new URL(request.url).pathname,
+    http_ver: cf(request, 'httpProtocol'),
+    user_agent: header(all, 'user-agent'),
+    referer: header(all, 'referer'),
+    accept_lang: header(all, 'accept-language'),
+    tls_version: cf(request, 'tlsVersion'),
+    tls_cipher: cf(request, 'tlsCipher'),
+    headers: redactHeaders(all),
+  };
+}
