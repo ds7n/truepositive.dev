@@ -47,6 +47,13 @@ test('redactHeaders drops sensitive headers case-insensitively', () => {
   assert.equal('authorization' in out, false);
 });
 
+test('redactHeaders drops sensitive headers with mixed-case keys', () => {
+  const out = redactHeaders({ 'Cookie': 'x', 'AUTHORIZATION': 'y', 'User-Agent': 'curl/8.7.1' });
+  assert.equal('Cookie' in out, false);
+  assert.equal('AUTHORIZATION' in out, false);
+  assert.deepEqual(out, { 'User-Agent': 'curl/8.7.1' });
+});
+
 test('redactHeaders keeps x-forwarded-for', () => {
   const out = redactHeaders({ 'x-forwarded-for': '203.0.113.7' });
   assert.deepEqual(out, { 'x-forwarded-for': '203.0.113.7' });
