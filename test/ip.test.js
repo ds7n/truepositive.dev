@@ -148,6 +148,8 @@ test('renderHtml never emits a sensitive header even if one leaks into headers',
   assert.equal(html.startsWith('<!DOCTYPE html>'), true);
   assert.equal(html.includes('203.0.113.7'), true);
   assert.equal(html.includes('TLSv1.3'), true);
+  assert.equal(html.toLowerCase().includes('cookie'), false);
+  assert.equal(html.toLowerCase().includes('authorization'), false);
 });
 
 test('renderHtml renders missing values as an em dash', () => {
