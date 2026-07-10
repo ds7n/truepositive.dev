@@ -114,18 +114,53 @@ test('extractFields redacts sensitive headers in the headers map', () => {
   assert.equal(f.headers['user-agent'], 'curl/8.7.1');
 });
 
+test('extractFields includes the full cf geo/network field set', () => {
+  const f = extractFields(fakeRequest({
+    headers: { 'cf-connecting-ip': '203.0.113.7' },
+    cf: {
+      country: 'US', region: 'Texas', regionCode: 'TX', city: 'Dallas',
+      postalCode: '75201', continent: 'NA', metroCode: '623',
+      timezone: 'America/Chicago', latitude: '32.7767', longitude: '-96.7970',
+      isEUCountry: null, asn: 13335, asOrganization: 'Cloudflare, Inc.',
+    },
+  }));
+  assert.equal(f.region, 'Texas');
+  assert.equal(f.region_code, 'TX');
+  assert.equal(f.postal_code, '75201');
+  assert.equal(f.continent, 'NA');
+  assert.equal(f.metro_code, '623');
+  assert.equal(f.timezone, 'America/Chicago');
+  assert.equal(f.latitude, '32.7767');
+  assert.equal(f.longitude, '-96.7970');
+  assert.equal(f.as_org, 'Cloudflare, Inc.');
+});
+
+test('extractFields attaches a parsed ua object', () => {
+  const f = extractFields(fakeRequest({
+    headers: { 'user-agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0' },
+  }));
+  assert.equal(f.ua.browser, 'Firefox');
+  assert.equal(f.ua.os, 'Linux');
+  assert.equal(f.ua.bot, false);
+});
+
 test('extractFields tolerates a request with no cf property', () => {
   const f = extractFields({ url: 'https://truepositive.dev/ip', method: 'GET', headers: new Headers() });
   assert.equal(f.country, null);
   assert.equal(f.path, '/ip');
 });
 
-import { renderJson, renderHtml } from '../functions/_lib.js';
+import { renderJson, renderHtml, parseUserAgent } from '../functions/_lib.js';
 
 const SAMPLE = {
-  ts: '2026-07-09T12:00:00.000Z', ip: '203.0.113.7', country: 'US', city: 'Dallas',
-  asn: 13335, colo: 'DFW', method: 'GET', path: '/ip', http_ver: 'HTTP/2',
-  user_agent: 'curl/8.7.1', referer: null, accept_lang: null,
+  ts: '2026-07-09T12:00:00.000Z', ip: '203.0.113.7',
+  country: 'US', region: 'Texas', region_code: 'TX', city: 'Dallas',
+  postal_code: '75201', continent: 'NA', metro_code: '623',
+  timezone: 'America/Chicago', latitude: '32.7767', longitude: '-96.7970', is_eu: null,
+  asn: 13335, as_org: 'Cloudflare, Inc.', colo: 'DFW',
+  method: 'GET', path: '/ip', http_ver: 'HTTP/2',
+  user_agent: 'curl/8.7.1', ua: parseUserAgent('curl/8.7.1'),
+  referer: null, accept_lang: null,
   tls_version: 'TLSv1.3', tls_cipher: 'AEAD-AES128-GCM-SHA256',
   headers: { 'user-agent': 'curl/8.7.1', accept: '*/*' },
 };
@@ -135,10 +170,22 @@ test('renderJson returns the fields object unchanged', () => {
 });
 
 test('renderHtml escapes a malicious User-Agent (no raw <script>)', () => {
-  const html = renderHtml({ ...SAMPLE, user_agent: '<script>alert(1)</script>',
-    headers: { 'user-agent': '<script>alert(1)</script>' } });
+  const evil = '<script>alert(1)</script>';
+  const html = renderHtml({ ...SAMPLE, user_agent: evil, ua: parseUserAgent(evil),
+    headers: { 'user-agent': evil } });
   assert.equal(html.includes('<script>alert(1)</script>'), false);
   assert.equal(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'), true);
+});
+
+test('renderHtml escapes a malicious Referer and header value', () => {
+  const html = renderHtml({ ...SAMPLE,
+    referer: '"><img src=x onerror=alert(1)>',
+    headers: { 'x-evil': '<b>x</b>' } });
+  // No raw injection from either the referer cell or a header value.
+  assert.equal(html.includes('<img src=x'), false);
+  assert.equal(html.includes('<b>x</b>'), false);
+  assert.equal(html.includes('&lt;img src=x onerror=alert(1)&gt;'), true);
+  assert.equal(html.includes('&lt;b&gt;x&lt;/b&gt;'), true);
 });
 
 test('renderHtml never emits a sensitive header even if one leaks into headers', () => {
@@ -154,6 +201,177 @@ test('renderHtml never emits a sensitive header even if one leaks into headers',
 
 test('renderHtml renders missing values as an em dash', () => {
   const html = renderHtml({ ...SAMPLE, referer: null });
-  // The Referer row label is present and its value cell shows the dash.
-  assert.match(html, /Referer[\s\S]*?—/);
+  // The Referer cell renders label then an em-dash value with no other cell
+  // boundary in between — pins the dash to Referer's own value, not a later field.
+  assert.match(html, /Referer<\/span><span class="v">—<\/span>/);
+});
+
+test('renderHtml renders parsed browser and keeps the raw user agent', () => {
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36';
+  const html = renderHtml({ ...SAMPLE, user_agent: ua, ua: parseUserAgent(ua) });
+  assert.equal(html.includes('Chrome 127.0.0.0'), true);   // parsed
+  assert.equal(html.includes('Windows'), true);            // parsed OS
+  assert.equal(html.includes(ua), true);                   // raw UA still present
+});
+
+// --- parseUserAgent ---
+
+test('parseUserAgent handles Chrome on Windows', () => {
+  const r = parseUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36');
+  assert.equal(r.browser, 'Chrome');
+  assert.equal(r.browser_version, '127.0.0.0');
+  assert.equal(r.os, 'Windows');
+  assert.equal(r.os_version, '10/11');
+  assert.equal(r.device, 'Desktop');
+  assert.equal(r.engine, 'Blink');
+  assert.equal(r.bot, false);
+});
+
+test('parseUserAgent handles Safari on iPhone (iOS)', () => {
+  const r = parseUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1');
+  assert.equal(r.browser, 'Safari');
+  assert.equal(r.browser_version, '17.5');
+  assert.equal(r.os, 'iOS');
+  assert.equal(r.os_version, '17.5');
+  assert.equal(r.device, 'Mobile');
+});
+
+test('parseUserAgent handles Firefox on Linux', () => {
+  const r = parseUserAgent('Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0');
+  assert.equal(r.browser, 'Firefox');
+  assert.equal(r.browser_version, '128.0');
+  assert.equal(r.os, 'Linux');
+  assert.equal(r.engine, 'Gecko');
+  assert.equal(r.device, 'Desktop');
+});
+
+test('parseUserAgent handles Chrome on Android (mobile)', () => {
+  const r = parseUserAgent('Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Mobile Safari/537.36');
+  assert.equal(r.browser, 'Chrome');
+  assert.equal(r.os, 'Android');
+  assert.equal(r.os_version, '14');
+  assert.equal(r.device, 'Mobile');
+});
+
+test('parseUserAgent picks Edge over Chrome despite the Chrome token', () => {
+  const r = parseUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/127.0.0.0');
+  assert.equal(r.browser, 'Edge');
+  assert.equal(r.browser_version, '127.0.0.0');
+});
+
+test('parseUserAgent handles Chrome on iOS (CriOS, no Version token)', () => {
+  const r = parseUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/127.0.6533.107 Mobile/15E148 Safari/604.1');
+  assert.equal(r.browser, 'Chrome');
+  assert.equal(r.browser_version, '127.0.6533.107');
+  assert.equal(r.os, 'iOS');
+  assert.equal(r.device, 'Mobile');
+});
+
+test('parseUserAgent handles Firefox on iOS (FxiOS, no Version token)', () => {
+  const r = parseUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/127.0 Mobile/15E148 Safari/605.1.15');
+  assert.equal(r.browser, 'Firefox');
+  assert.equal(r.browser_version, '127.0');
+  assert.equal(r.os, 'iOS');
+  assert.equal(r.device, 'Mobile');
+});
+
+test('parseUserAgent still detects plain Safari on iOS (Version token present)', () => {
+  const r = parseUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1');
+  assert.equal(r.browser, 'Safari');
+  assert.equal(r.browser_version, '17.5');
+});
+
+test('parseUserAgent flags Googlebot as a bot', () => {
+  const r = parseUserAgent('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)');
+  assert.equal(r.bot, true);
+  assert.equal(r.browser, 'Googlebot');
+});
+
+test('parseUserAgent flags curl as a bot with its version', () => {
+  const r = parseUserAgent('curl/8.7.1');
+  assert.equal(r.bot, true);
+  assert.equal(r.browser, 'curl');
+  assert.equal(r.browser_version, '8.7.1');
+});
+
+test('parseUserAgent returns all-null (bot=false) for empty/invalid input', () => {
+  for (const bad of [null, undefined, '', 42]) {
+    const r = parseUserAgent(bad);
+    assert.equal(r.browser, null);
+    assert.equal(r.os, null);
+    assert.equal(r.device, null);
+    assert.equal(r.bot, false);
+  }
+});
+
+test('parseUserAgent does not throw on a garbage string', () => {
+  const r = parseUserAgent('!!!!not a real ua!!!!');
+  // Unknown browser/os, but device defaults to Desktop and no crash.
+  assert.equal(r.browser, null);
+  assert.equal(r.bot, false);
+});
+
+// --- visitRow: single source of truth for the D1 INSERT ---
+
+import { visitRow, prefersJson } from '../functions/_lib.js';
+import { readFileSync } from 'node:fs';
+
+test('visitRow columns exactly match schema.sql (order and set, minus id)', () => {
+  const schema = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8');
+  const create = schema.match(/CREATE TABLE visits \(([\s\S]*?)\);/)[1];
+  const schemaCols = create
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('--'))
+    .map((l) => l.split(/\s+/)[0])
+    .filter((c) => c !== 'id');
+  const rowCols = visitRow(SAMPLE).map(([c]) => c);
+  assert.deepEqual(rowCols, schemaCols);
+});
+
+test('visitRow maps values in the same order as its columns', () => {
+  const row = visitRow(SAMPLE);
+  const byCol = Object.fromEntries(row);
+  assert.equal(byCol.ip, '203.0.113.7');
+  assert.equal(byCol.region_code, 'TX');
+  assert.equal(byCol.as_org, 'Cloudflare, Inc.');
+  assert.equal(byCol.ua_browser, SAMPLE.ua.browser);
+  assert.equal(byCol.headers_json, JSON.stringify(SAMPLE.headers));
+});
+
+test('visitRow coerces ua_bot to 1/0 integer', () => {
+  const botRow = Object.fromEntries(visitRow({ ...SAMPLE, ua: { ...SAMPLE.ua, bot: true } }));
+  const humanRow = Object.fromEntries(visitRow({ ...SAMPLE, ua: { ...SAMPLE.ua, bot: false } }));
+  assert.equal(botRow.ua_bot, 1);
+  assert.equal(humanRow.ua_bot, 0);
+});
+
+test('visitRow tolerates a missing ua object (all ua_* null, bot 0)', () => {
+  const row = Object.fromEntries(visitRow({ ...SAMPLE, ua: undefined }));
+  assert.equal(row.ua_browser, null);
+  assert.equal(row.ua_bot, 0);
+});
+
+// --- prefersJson: format negotiation ---
+
+test('prefersJson: /ip/json path returns JSON even for a browser Accept', () => {
+  assert.equal(prefersJson('https://x/ip/json', 'text/html,application/xhtml+xml'), true);
+});
+
+test('prefersJson: /ip/json/ trailing slash still returns JSON', () => {
+  assert.equal(prefersJson('https://x/ip/json/', 'text/html'), true);
+});
+
+test('prefersJson: ?format=json returns JSON (case-insensitive)', () => {
+  assert.equal(prefersJson('https://x/ip?format=JSON', 'text/html'), true);
+});
+
+test('prefersJson: plain /ip with browser Accept returns HTML', () => {
+  assert.equal(prefersJson('https://x/ip', 'text/html,application/xhtml+xml'), false);
+});
+
+test('prefersJson: plain /ip with no/curl Accept returns JSON', () => {
+  assert.equal(prefersJson('https://x/ip', '*/*'), true);
+  assert.equal(prefersJson('https://x/ip', ''), true);
+  assert.equal(prefersJson('https://x/ip', null), true);
 });
