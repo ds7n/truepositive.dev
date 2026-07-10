@@ -227,9 +227,9 @@ function dash(value) {
     : escapeHtml(value);
 }
 
-/** Render one label/value grid cell; value is escaped, null/empty → em dash. */
+/** Render one full-width label/value row; value is escaped, null/empty → em dash. */
 function cell(label, value) {
-  return `<div class="cell"><span class="k">${escapeHtml(label)}</span><span class="v">${dash(value)}</span></div>`;
+  return `<div class="row"><span class="k">${escapeHtml(label)}</span><span class="v">${dash(value)}</span></div>`;
 }
 
 /** "City, ST, US" — best-effort human location line from raw fields (unescaped). */
@@ -276,20 +276,20 @@ export function renderHtml(f) {
 :root{--bg:#0E1116;--panel:#161A22;--panel-high:#1F2530;--line:#2A323F;--text:#E8EBF0;--muted:#8A93A3;--bronze:#D49A5C;--bronze-bright:#F2C58A}
 *{box-sizing:border-box}html,body{margin:0}
 body{background:var(--bg);color:var(--text);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
-main{max-width:680px;margin:0 auto;padding:clamp(1.5rem,5vw,3rem) 1.25rem 2.5rem}
+main{max-width:560px;margin:0 auto;padding:clamp(1.5rem,5vw,3rem) 1.25rem 2.5rem}
 .eyebrow{color:var(--muted);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;margin:0 0 .4rem}
 .ip{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:clamp(1.6rem,6vw,2.4rem);font-weight:650;letter-spacing:-.01em;color:var(--bronze-bright);margin:0 0 .3rem;word-break:break-all}
 .sub{color:var(--muted);font-size:.9rem;margin:0 0 1.6rem}
 h2{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:1.4rem 0 .5rem;font-weight:600}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-@media(max-width:460px){.grid{grid-template-columns:minmax(0,1fr)}}
-.cell{background:var(--panel);padding:.5rem .8rem;min-width:0}
-.cell .k{display:block;color:var(--muted);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;margin-bottom:.1rem}
-.cell .v{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9rem;word-break:break-word}
-.cell.wide{grid-column:1/-1}
-.headers{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:.5rem .2rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8rem}
-.hline{display:flex;gap:.6rem;padding:.2rem .8rem;word-break:break-word}
-.hline .hk{color:var(--bronze);flex:0 0 auto;min-width:8.5rem}
+.table{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.row{display:flex;gap:.9rem;padding:.5rem .9rem;border-top:1px solid var(--line);word-break:break-word}
+.table .row:first-child{border-top:none}
+.row .k{flex:0 0 8.5rem;color:var(--muted);font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;padding-top:.15rem}
+.row .v{flex:1 1 auto;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9rem;word-break:break-word}
+.headers{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8rem}
+.hline{display:flex;gap:.9rem;padding:.35rem .9rem;border-top:1px solid var(--line);word-break:break-word}
+.headers .hline:first-child{border-top:none}
+.hline .hk{color:var(--bronze);flex:0 0 8.5rem}
 .hline .hv{color:var(--text);min-width:0;word-break:break-word}
 .muted{color:var(--muted)}
 </style>
@@ -301,16 +301,16 @@ h2{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--mut
 <p class="sub">${escapeHtml(locationLine(f) || 'Location unknown')}${f.asn ? ' · AS' + escapeHtml(f.asn) : ''}</p>
 
 <h2>Location</h2>
-<div class="grid">${cell('City', f.city)}${cell('Region', regionLine(f))}${cell('Postal code', f.postal_code)}${cell('Country', f.country)}${cell('Continent', f.continent)}${cell('Timezone', f.timezone)}${cell('Coordinates', coordLine(f))}${cell('Network', f.as_org)}</div>
+<div class="table">${cell('City', f.city)}${cell('Region', regionLine(f))}${cell('Postal code', f.postal_code)}${cell('Country', f.country)}${cell('Continent', f.continent)}${cell('Timezone', f.timezone)}${cell('Coordinates', coordLine(f))}${cell('Network', f.as_org)}</div>
 
 <h2>Browser</h2>
-<div class="grid">${cell('Browser', versionLine(f.ua.browser, f.ua.browser_version))}${cell('Operating system', versionLine(f.ua.os, f.ua.os_version))}${cell('Device', f.ua.device)}${cell('Engine', f.ua.engine)}${cell('Language', f.accept_lang)}${cell('Bot', f.ua.bot ? 'yes' : 'no')}<div class="cell wide"><span class="k">Raw user agent</span><span class="v">${dash(f.user_agent)}</span></div></div>
+<div class="table">${cell('Browser', versionLine(f.ua.browser, f.ua.browser_version))}${cell('Operating system', versionLine(f.ua.os, f.ua.os_version))}${cell('Device', f.ua.device)}${cell('Engine', f.ua.engine)}${cell('Language', f.accept_lang)}${cell('Bot', f.ua.bot ? 'yes' : 'no')}${cell('Raw user agent', f.user_agent)}</div>
 
 <h2>Request</h2>
-<div class="grid">${cell('Method', f.method)}${cell('Path', f.path)}${cell('Referer', f.referer)}${cell('Received (UTC)', f.ts)}</div>
+<div class="table">${cell('Method', f.method)}${cell('Path', f.path)}${cell('Referer', f.referer)}${cell('Received (UTC)', f.ts)}</div>
 
 <h2>Connection</h2>
-<div class="grid">${cell('TLS', f.tls_version)}${cell('HTTP', f.http_ver)}${cell('Cipher', f.tls_cipher)}${cell('Edge (colo)', f.colo)}</div>
+<div class="table">${cell('TLS', f.tls_version)}${cell('HTTP', f.http_ver)}${cell('Cipher', f.tls_cipher)}${cell('Edge (colo)', f.colo)}</div>
 
 <h2>Request headers</h2>
 <div class="headers">${headerRows(f.headers)}</div>
