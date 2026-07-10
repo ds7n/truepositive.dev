@@ -1,0 +1,7 @@
+name = "truepositive"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "truepositive"
+database_id = "ce60d1bc-077d-4e93-bdd5-8accdb52e366"
