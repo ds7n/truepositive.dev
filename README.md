@@ -11,6 +11,42 @@ custom domains in the Pages project.
 
 To preview locally, open `index.html` in a browser (or `python3 -m http.server`).
 
+### Deploy checklist
+
+The static pages deploy on push with no extra steps. The `/ip` endpoint needs
+its D1 database in sync — run this when the `visits` schema changes (or on first
+setup). All commands run from the repo root with `CLOUDFLARE_API_TOKEN` in
+`.env` (see Provisioning below).
+
+1. **Merge to `main` and pull** so you apply the current schema:
+
+       git checkout main && git pull
+
+2. **Apply the schema to the production DB.** `schema.sql` begins with
+   `DROP TABLE IF EXISTS visits`, so this **drops and recreates** the table
+   (existing rows are lost):
+
+       npx wrangler d1 execute truepositive --remote --file schema.sql
+
+   Verify the column count matches `schema.sql`:
+
+       npx wrangler d1 execute truepositive --remote \
+         --command "SELECT COUNT(*) AS cols FROM pragma_table_info('visits')"
+
+3. **Confirm the Pages D1 binding exists** (one-time; git-push deploys do NOT
+   read `wrangler.toml` bindings). Dashboard → Workers & Pages → `truepositive`
+   → Settings → Functions → D1 database bindings → variable `DB` →
+   database `truepositive`. Without it, `/ip` echoes but logs nothing.
+
+4. **Smoke-test logging** after deploy:
+
+       curl -s https://truepositive.dev/ip > /dev/null
+       npx wrangler d1 execute truepositive --remote \
+         --command "SELECT ts, ip, city, as_org, ua_browser FROM visits ORDER BY ts DESC LIMIT 1"
+
+Steps 2 and 3 are independent and order doesn't matter — the insert no-ops
+safely until both the table and the binding exist, so `/ip` never breaks.
+
 ## /ip request-echo endpoint
 
 `GET /ip` echoes the visitor's request/source info and logs each visit to
