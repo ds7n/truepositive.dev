@@ -217,6 +217,28 @@ test('renderHtml renders missing values as an em dash', () => {
   assert.match(html, /Referer<\/span><span class="v">—<\/span>/);
 });
 
+test('renderHtml links coordinates to OpenStreetMap with the right pin', () => {
+  const html = renderHtml(SAMPLE); // lat 32.7767, lon -96.7970
+  assert.match(html, /href="https:\/\/www\.openstreetmap\.org\/\?mlat=32\.7767&amp;mlon=-96\.7970#map=10\/32\.7767\/-96\.7970"/);
+  assert.match(html, /rel="noopener noreferrer"/);
+  assert.match(html, /32\.7767, -96\.7970 ↗<\/a>/);
+});
+
+test('renderHtml shows an em dash for Coordinates when lat/lon are absent', () => {
+  const html = renderHtml({ ...SAMPLE, latitude: null, longitude: null });
+  assert.match(html, /Coordinates<\/span><span class="v">—<\/span>/);
+  assert.equal(html.includes('openstreetmap.org'), false);
+});
+
+test('renderHtml map link cannot break out of the href on hostile coordinates', () => {
+  const html = renderHtml({ ...SAMPLE, latitude: '1"><script>alert(1)</script>', longitude: '2' });
+  // No raw injection: the quote/script never appears unescaped anywhere.
+  assert.equal(html.includes('"><script>'), false);
+  assert.equal(html.includes('<script>alert(1)</script>'), false);
+  // The hostile value is percent-encoded inside the href and escaped in text.
+  assert.match(html, /mlat=1%22%3E%3Cscript%3E/);
+});
+
 test('renderHtml renders parsed browser and keeps the raw user agent', () => {
   const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36';
   const html = renderHtml({ ...SAMPLE, user_agent: ua, ua: parseUserAgent(ua) });
