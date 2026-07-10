@@ -165,8 +165,19 @@ const SAMPLE = {
   headers: { 'user-agent': 'curl/8.7.1', accept: '*/*' },
 };
 
-test('renderJson returns the fields object unchanged', () => {
+test('renderJson preserves all field values (deep-equal to input)', () => {
   assert.deepEqual(renderJson(SAMPLE), SAMPLE);
+});
+
+test('renderJson sorts keys alphabetically at the top level and nested', () => {
+  const out = renderJson({
+    ip: '203.0.113.7', asn: 1, country: 'US',
+    headers: { 'x-forwarded-for': '1', accept: '2', 'cf-connecting-ip': '3' },
+    ua: { os: 'Linux', browser: 'Firefox', bot: false },
+  });
+  assert.deepEqual(Object.keys(out), ['asn', 'country', 'headers', 'ip', 'ua']);
+  assert.deepEqual(Object.keys(out.headers), ['accept', 'cf-connecting-ip', 'x-forwarded-for']);
+  assert.deepEqual(Object.keys(out.ua), ['bot', 'browser', 'os']);
 });
 
 test('renderHtml escapes a malicious User-Agent (no raw <script>)', () => {
