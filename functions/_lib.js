@@ -243,6 +243,31 @@ function cell(label, value) {
   return `<div class="row"><span class="k">${escapeHtml(label)}</span><span class="v">${dash(value)}</span></div>`;
 }
 
+/**
+ * Like cell(), but `valueHtml` is trusted, already-escaped HTML (e.g. a link).
+ * Callers MUST escape every dynamic part before passing it here. `null` → dash.
+ */
+function cellRaw(label, valueHtml) {
+  const shown = valueHtml == null ? '—' : valueHtml;
+  return `<div class="row"><span class="k">${escapeHtml(label)}</span><span class="v">${shown}</span></div>`;
+}
+
+/**
+ * A "coordinates → OpenStreetMap" link, or null when coordinates are absent.
+ * Returns trusted HTML: every dynamic part (the coordinates in the URL and the
+ * visible text) is individually escaped. Latitude/longitude come from
+ * Cloudflare as numeric strings; encodeURIComponent guards the href and
+ * escapeHtml guards the attribute/text context.
+ */
+function mapLink(f) {
+  if (!f.latitude || !f.longitude) return null;
+  const lat = encodeURIComponent(f.latitude);
+  const lon = encodeURIComponent(f.longitude);
+  const href = escapeHtml(`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=10/${lat}/${lon}`);
+  const text = escapeHtml(`${f.latitude}, ${f.longitude}`);
+  return `<a href="${href}" target="_blank" rel="noopener noreferrer">${text} ↗</a>`;
+}
+
 /** "City, ST, US" — best-effort human location line from raw fields (unescaped). */
 function locationLine(f) {
   return [f.city, f.region_code || f.region, f.country].filter(Boolean).join(', ');
@@ -252,11 +277,6 @@ function locationLine(f) {
 function regionLine(f) {
   if (f.region && f.region_code && f.region !== f.region_code) return `${f.region} (${f.region_code})`;
   return f.region || f.region_code || null;
-}
-
-/** "32.7767, -96.7970" or null (unescaped). */
-function coordLine(f) {
-  return f.latitude && f.longitude ? `${f.latitude}, ${f.longitude}` : null;
 }
 
 /** "Chrome 127" / "Chrome" / null — name with optional version (unescaped). */
@@ -297,6 +317,8 @@ h2{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--mut
 .table .row:first-child{border-top:none}
 .row .k{flex:0 0 8.5rem;color:var(--muted);font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;padding-top:.15rem}
 .row .v{flex:1 1 auto;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9rem;word-break:break-word}
+.row .v a{color:var(--bronze-bright);text-decoration:none;border-bottom:1px solid var(--line)}
+.row .v a:hover{border-color:var(--bronze-bright)}
 .headers{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8rem}
 .hline{display:flex;gap:.9rem;padding:.35rem .9rem;border-top:1px solid var(--line);word-break:break-word}
 .headers .hline:first-child{border-top:none}
@@ -312,7 +334,7 @@ h2{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--mut
 <p class="sub">${escapeHtml(locationLine(f) || 'Location unknown')}${f.asn ? ' · AS' + escapeHtml(f.asn) : ''}</p>
 
 <h2>Location</h2>
-<div class="table">${cell('City', f.city)}${cell('Region', regionLine(f))}${cell('Postal code', f.postal_code)}${cell('Country', f.country)}${cell('Continent', f.continent)}${cell('Timezone', f.timezone)}${cell('Coordinates', coordLine(f))}${cell('Network', f.as_org)}</div>
+<div class="table">${cell('City', f.city)}${cell('Region', regionLine(f))}${cell('Postal code', f.postal_code)}${cell('Country', f.country)}${cell('Continent', f.continent)}${cell('Timezone', f.timezone)}${cellRaw('Coordinates', mapLink(f))}${cell('Network', f.as_org)}</div>
 
 <h2>Browser</h2>
 <div class="table">${cell('Browser', versionLine(f.ua.browser, f.ua.browser_version))}${cell('Operating system', versionLine(f.ua.os, f.ua.os_version))}${cell('Device', f.ua.device)}${cell('Engine', f.ua.engine)}${cell('Language', f.accept_lang)}${cell('Bot', f.ua.bot ? 'yes' : 'no')}${cell('Raw user agent', f.user_agent)}</div>
