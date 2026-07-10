@@ -259,6 +259,28 @@ test('parseUserAgent picks Edge over Chrome despite the Chrome token', () => {
   assert.equal(r.browser_version, '127.0.0.0');
 });
 
+test('parseUserAgent handles Chrome on iOS (CriOS, no Version token)', () => {
+  const r = parseUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/127.0.6533.107 Mobile/15E148 Safari/604.1');
+  assert.equal(r.browser, 'Chrome');
+  assert.equal(r.browser_version, '127.0.6533.107');
+  assert.equal(r.os, 'iOS');
+  assert.equal(r.device, 'Mobile');
+});
+
+test('parseUserAgent handles Firefox on iOS (FxiOS, no Version token)', () => {
+  const r = parseUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/127.0 Mobile/15E148 Safari/605.1.15');
+  assert.equal(r.browser, 'Firefox');
+  assert.equal(r.browser_version, '127.0');
+  assert.equal(r.os, 'iOS');
+  assert.equal(r.device, 'Mobile');
+});
+
+test('parseUserAgent still detects plain Safari on iOS (Version token present)', () => {
+  const r = parseUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1');
+  assert.equal(r.browser, 'Safari');
+  assert.equal(r.browser_version, '17.5');
+});
+
 test('parseUserAgent flags Googlebot as a bot', () => {
   const r = parseUserAgent('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)');
   assert.equal(r.bot, true);
@@ -287,4 +309,69 @@ test('parseUserAgent does not throw on a garbage string', () => {
   // Unknown browser/os, but device defaults to Desktop and no crash.
   assert.equal(r.browser, null);
   assert.equal(r.bot, false);
+});
+
+// --- visitRow: single source of truth for the D1 INSERT ---
+
+import { visitRow, prefersJson } from '../functions/_lib.js';
+import { readFileSync } from 'node:fs';
+
+test('visitRow columns exactly match schema.sql (order and set, minus id)', () => {
+  const schema = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8');
+  const create = schema.match(/CREATE TABLE visits \(([\s\S]*?)\);/)[1];
+  const schemaCols = create
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('--'))
+    .map((l) => l.split(/\s+/)[0])
+    .filter((c) => c !== 'id');
+  const rowCols = visitRow(SAMPLE).map(([c]) => c);
+  assert.deepEqual(rowCols, schemaCols);
+});
+
+test('visitRow maps values in the same order as its columns', () => {
+  const row = visitRow(SAMPLE);
+  const byCol = Object.fromEntries(row);
+  assert.equal(byCol.ip, '203.0.113.7');
+  assert.equal(byCol.region_code, 'TX');
+  assert.equal(byCol.as_org, 'Cloudflare, Inc.');
+  assert.equal(byCol.ua_browser, SAMPLE.ua.browser);
+  assert.equal(byCol.headers_json, JSON.stringify(SAMPLE.headers));
+});
+
+test('visitRow coerces ua_bot to 1/0 integer', () => {
+  const botRow = Object.fromEntries(visitRow({ ...SAMPLE, ua: { ...SAMPLE.ua, bot: true } }));
+  const humanRow = Object.fromEntries(visitRow({ ...SAMPLE, ua: { ...SAMPLE.ua, bot: false } }));
+  assert.equal(botRow.ua_bot, 1);
+  assert.equal(humanRow.ua_bot, 0);
+});
+
+test('visitRow tolerates a missing ua object (all ua_* null, bot 0)', () => {
+  const row = Object.fromEntries(visitRow({ ...SAMPLE, ua: undefined }));
+  assert.equal(row.ua_browser, null);
+  assert.equal(row.ua_bot, 0);
+});
+
+// --- prefersJson: format negotiation ---
+
+test('prefersJson: /ip/json path returns JSON even for a browser Accept', () => {
+  assert.equal(prefersJson('https://x/ip/json', 'text/html,application/xhtml+xml'), true);
+});
+
+test('prefersJson: /ip/json/ trailing slash still returns JSON', () => {
+  assert.equal(prefersJson('https://x/ip/json/', 'text/html'), true);
+});
+
+test('prefersJson: ?format=json returns JSON (case-insensitive)', () => {
+  assert.equal(prefersJson('https://x/ip?format=JSON', 'text/html'), true);
+});
+
+test('prefersJson: plain /ip with browser Accept returns HTML', () => {
+  assert.equal(prefersJson('https://x/ip', 'text/html,application/xhtml+xml'), false);
+});
+
+test('prefersJson: plain /ip with no/curl Accept returns JSON', () => {
+  assert.equal(prefersJson('https://x/ip', '*/*'), true);
+  assert.equal(prefersJson('https://x/ip', ''), true);
+  assert.equal(prefersJson('https://x/ip', null), true);
 });
