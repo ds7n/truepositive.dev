@@ -216,8 +216,19 @@ export function prefersJson(urlString, acceptHeader) {
   return !(acceptHeader || '').includes('text/html');
 }
 
+/** Return an object with keys sorted alphabetically (recursively for plain
+ *  objects). Arrays and non-objects pass through unchanged. */
+function sortKeys(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+  const out = {};
+  for (const key of Object.keys(value).sort()) out[key] = sortKeys(value[key]);
+  return out;
+}
+
+/** JSON view of the fields, with keys sorted alphabetically (top level and
+ *  nested objects like `headers` and `ua`) for stable, scannable output. */
 export function renderJson(fields) {
-  return fields;
+  return sortKeys(fields);
 }
 
 /** Escape a value for direct HTML interpolation; null/empty → em dash. */
