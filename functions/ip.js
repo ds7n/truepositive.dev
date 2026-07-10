@@ -1,4 +1,4 @@
-import { extractFields, renderJson, renderHtml } from './_lib.js';
+import { extractFields, renderJson, renderHtml, visitRow, prefersJson } from './_lib.js';
 
 const SECURITY_HEADERS = {
   'Cache-Control': 'no-store',
@@ -7,49 +7,22 @@ const SECURITY_HEADERS = {
 
 const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:";
 
-/** Best-effort insert; never throws into the response path. */
-async function logVisit(env, f) {
+/** Best-effort insert; never throws into the response path. Columns and bound
+ *  values both come from visitRow() so they cannot drift out of alignment. */
+async function logVisit(env, fields) {
   try {
     if (!env || !env.DB) return;
-    await env.DB.prepare(
-      `INSERT INTO visits
-        (ts, ip,
-         country, region, region_code, city, postal_code, continent, metro_code,
-         timezone, latitude, longitude, is_eu,
-         asn, as_org, colo,
-         method, path, http_ver,
-         user_agent, ua_browser, ua_browser_version, ua_os, ua_os_version,
-         ua_device, ua_engine, ua_bot,
-         referer, accept_lang, tls_version, tls_cipher, headers_json)
-       VALUES (?,?, ?,?,?,?,?,?,?, ?,?,?,?, ?,?,?, ?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?)`,
-    ).bind(
-      f.ts, f.ip,
-      f.country, f.region, f.region_code, f.city, f.postal_code, f.continent, f.metro_code,
-      f.timezone, f.latitude, f.longitude, f.is_eu,
-      f.asn, f.as_org, f.colo,
-      f.method, f.path, f.http_ver,
-      f.user_agent, f.ua.browser, f.ua.browser_version, f.ua.os, f.ua.os_version,
-      f.ua.device, f.ua.engine, f.ua.bot ? 1 : 0,
-      f.referer, f.accept_lang, f.tls_version, f.tls_cipher,
-      JSON.stringify(f.headers),
-    ).run();
+    const row = visitRow(fields);
+    const columns = row.map(([c]) => c).join(', ');
+    const placeholders = row.map(() => '?').join(', ');
+    await env.DB
+      .prepare(`INSERT INTO visits (${columns}) VALUES (${placeholders})`)
+      .bind(...row.map(([, v]) => v))
+      .run();
   } catch (err) {
     // Logging is best-effort; never surface DB errors to the client.
     console.log('visit-log-failed', err && err.message);
   }
-}
-
-/**
- * Choose the response format. JSON wins when: the path ends in /json (the
- * dedicated /ip/json route), ?format=json is set, or the client isn't a
- * browser (no Accept: text/html). Otherwise HTML.
- */
-function wantsHtml(request) {
-  const url = new URL(request.url);
-  if (url.pathname.replace(/\/$/, '').endsWith('/json')) return false;
-  if ((url.searchParams.get('format') || '').toLowerCase() === 'json') return false;
-  const accept = request.headers.get('accept') || '';
-  return accept.includes('text/html');
 }
 
 async function handle(context) {
@@ -57,7 +30,8 @@ async function handle(context) {
   const fields = extractFields(request);
   await logVisit(env, fields);
 
-  if (wantsHtml(request)) {
+  const asJson = prefersJson(request.url, request.headers.get('accept'));
+  if (!asJson) {
     return new Response(renderHtml(fields), {
       headers: {
         ...SECURITY_HEADERS,

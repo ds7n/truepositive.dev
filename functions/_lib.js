@@ -99,9 +99,13 @@ export function parseUserAgent(ua) {
     out.os = 'Linux';
   }
 
-  // Browser + version. Order matters: Edge/Opera/Brave impersonate Chrome.
+  // Browser + version. Order matters: Edge/Opera/Brave impersonate Chrome, and
+  // third-party iOS browsers (CriOS/FxiOS/EdgiOS/OPT) carry a Safari token but
+  // no Version/ token, so they must be matched before the Safari fallback.
   if ((m = ua.match(/Edg(?:iOS|A)?\/([\d.]+)/))) { out.browser = 'Edge'; out.browser_version = m[1]; }
-  else if ((m = ua.match(/OPR\/([\d.]+)/)) || (m = ua.match(/Opera\/([\d.]+)/))) { out.browser = 'Opera'; out.browser_version = m[1]; }
+  else if ((m = ua.match(/CriOS\/([\d.]+)/))) { out.browser = 'Chrome'; out.browser_version = m[1]; }
+  else if ((m = ua.match(/FxiOS\/([\d.]+)/))) { out.browser = 'Firefox'; out.browser_version = m[1]; }
+  else if ((m = ua.match(/OPR\/([\d.]+)/)) || (m = ua.match(/OPT\/([\d.]+)/)) || (m = ua.match(/Opera\/([\d.]+)/))) { out.browser = 'Opera'; out.browser_version = m[1]; }
   else if ((m = ua.match(/SamsungBrowser\/([\d.]+)/))) { out.browser = 'Samsung Internet'; out.browser_version = m[1]; }
   else if ((m = ua.match(/Firefox\/([\d.]+)/))) { out.browser = 'Firefox'; out.browser_version = m[1]; }
   else if ((m = ua.match(/Chrome\/([\d.]+)/))) { out.browser = 'Chrome'; out.browser_version = m[1]; }
@@ -156,6 +160,60 @@ export function extractFields(request) {
     tls_cipher: cf(request, 'tlsCipher'),
     headers: redactHeaders(all),
   };
+}
+
+/**
+ * Ordered (column, value) pairs for one row of the `visits` table. Single
+ * source of truth for the D1 INSERT: the column list and the bound values are
+ * derived from the SAME array, so they can never drift out of order. Keep this
+ * in sync with schema.sql's column list (minus the autoincrement `id`).
+ */
+export function visitRow(f) {
+  const ua = f.ua || {};
+  return [
+    ['ts', f.ts],
+    ['ip', f.ip],
+    ['country', f.country],
+    ['region', f.region],
+    ['region_code', f.region_code],
+    ['city', f.city],
+    ['postal_code', f.postal_code],
+    ['continent', f.continent],
+    ['metro_code', f.metro_code],
+    ['timezone', f.timezone],
+    ['latitude', f.latitude],
+    ['longitude', f.longitude],
+    ['is_eu', f.is_eu],
+    ['asn', f.asn],
+    ['as_org', f.as_org],
+    ['colo', f.colo],
+    ['method', f.method],
+    ['path', f.path],
+    ['http_ver', f.http_ver],
+    ['user_agent', f.user_agent],
+    ['ua_browser', ua.browser ?? null],
+    ['ua_browser_version', ua.browser_version ?? null],
+    ['ua_os', ua.os ?? null],
+    ['ua_os_version', ua.os_version ?? null],
+    ['ua_device', ua.device ?? null],
+    ['ua_engine', ua.engine ?? null],
+    ['ua_bot', ua.bot ? 1 : 0],
+    ['referer', f.referer],
+    ['accept_lang', f.accept_lang],
+    ['tls_version', f.tls_version],
+    ['tls_cipher', f.tls_cipher],
+    ['headers_json', JSON.stringify(f.headers)],
+  ];
+}
+
+/** Decide the response format for /ip. JSON when the path ends in /json, when
+ *  ?format=json is set, or when the client is not a browser (no text/html in
+ *  Accept). HTML otherwise. Pure — takes a URL string and an Accept string. */
+export function prefersJson(urlString, acceptHeader) {
+  const url = new URL(urlString);
+  if (url.pathname.replace(/\/$/, '').endsWith('/json')) return true;
+  if ((url.searchParams.get('format') || '').toLowerCase() === 'json') return true;
+  return !(acceptHeader || '').includes('text/html');
 }
 
 export function renderJson(fields) {
