@@ -1,0 +1,9 @@
+# Superpowers scratch: plans & specs, kept local only
+docs/superpowers/
+
+# Environment / secrets
+.env
+.env.*
+
+# Data directories
+data/
